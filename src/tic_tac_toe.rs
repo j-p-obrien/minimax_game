@@ -19,27 +19,27 @@ pub enum Piece {
 /// otherwise. It would make sense to make this a struct to ensure that the positions are always
 /// valid, but since this is not exposed to the user I will not add the extra boilerplate
 /// necessary for this.
-type Positions = u16;
+type Position = u16;
 
 /// Represents a move. A single 1 bit denotes which position to move to. Note that only the 9
 /// rightmost logical bits may be 1, since we have only 9 squares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Move(Positions);
+pub struct Move(Position);
 
-/// The state of the board. player1 and player2 encode the positions for Player 1 and Player 2,
+/// The state of the board. player1 and player2 encode the position for Player 1 and Player 2,
 /// respectively. to_move encodes which player's turn it is. player1_piece encodes whether player
 /// 1 is X's or O's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BoardState {
-    player1: Positions,
-    player2: Positions,
+    player1: Position,
+    player2: Position,
     to_move: Player,
     player1_piece: Piece,
 }
 
-/// This encodes the winning positions. If A is the positions of a player, then the player is in
+/// This encodes the winning positions. If A is the position of a player, then the player is in
 /// a winning position only if (A & WINNING_POSITIONS[i]) == WINNING_POSITIONS[i] for some i.
-const WINNING_POSITIONS: [Positions; 8] = [
+const WINNING_POSITIONS: [Position; 8] = [
     // Top row
     0b0000_0000_0000_0111,
     // Middle row
@@ -76,7 +76,7 @@ const ALL_MOVES: [Move; 9] = [
 /// If all of these positions are occupied and there is no winner yet then the game is a draw.
 /// If A and B are the positions of players A and B then the game is a draw only if:
 /// (A | B) & DRAW == DRAW
-const DRAW: Positions = 0b0000_0001_1111_1111;
+const DRAW: Position = 0b0000_0001_1111_1111;
 
 impl Piece {
     pub fn other(&self) -> Piece {
@@ -110,7 +110,7 @@ impl Display for BoardState {
 }
 
 impl BoardState {
-    fn display_row(&self, f: &mut std::fmt::Formatter<'_>, row: Positions) -> std::fmt::Result {
+    fn display_row(&self, f: &mut std::fmt::Formatter<'_>, row: Position) -> std::fmt::Result {
         let row_offset = row * 3;
         let mut buffer = [Piece::Empty; 3];
         buffer.iter_mut().enumerate().for_each(|(i, piece)| {
@@ -141,11 +141,25 @@ impl BoardState {
         (move_candidate.0 & filled_positions) == 0
     }
 
+    /// Gets all the legal moves given the current board state.
+    pub fn get_legal_moves(&self) -> Vec<Move> {
+        ALL_MOVES
+            .into_iter()
+            .filter(|candidate| self.move_is_legal(candidate))
+            .collect()
+    }
+
+    pub fn next_state(&self, mov: &Move) -> BoardState {
+        let mut board_clone = self.clone();
+        board_clone.apply_move(mov);
+        board_clone
+    }
+
     /// This function does not check whether a move is valid or not. The safer option is to use
     /// try_move(), which will check to see if a move is legal before doing it. This should only
     /// be used for performance reasons or if you have already checked that the move is legal.
-    pub fn apply_move(&mut self, move_candidate: &Move) {
-        *self.current_player_positions_mut() |= move_candidate.0;
+    pub fn apply_move(&mut self, mov: &Move) {
+        *self.current_player_position_mut() |= mov.0;
         self.to_move.flip_player()
     }
 
@@ -153,26 +167,26 @@ impl BoardState {
     pub fn last_player_is_winner(&self) -> bool {
         WINNING_POSITIONS
             .into_iter()
-            .any(|pos| (pos & self.last_player_positions()) == pos)
+            .any(|pos| (pos & self.last_player_position()) == pos)
     }
 
     /// Returns true if the player whose turn it is to move is in a winning state. This probab
     pub fn current_player_is_winner(&self) -> bool {
         WINNING_POSITIONS
             .into_iter()
-            .any(|pos| (pos & self.current_player_positions()) == pos)
+            .any(|pos| (pos & self.current_player_position()) == pos)
     }
 
     /// Returns true if the given Player is in a winning state.
     pub fn is_winner(&self, player: &Player) -> bool {
-        let positions = if *player == Player::One {
+        let position = if *player == Player::One {
             self.player1
         } else {
             self.player2
         };
         WINNING_POSITIONS
             .into_iter()
-            .any(|pos| (positions & pos) == pos)
+            .any(|pos| (position & pos) == pos)
     }
 
     /// Returns Some(Player) if Player is in a winning position; None otherwise
@@ -201,8 +215,8 @@ impl BoardState {
         self.to_move.other_player()
     }
 
-    /// Returns an immutable reference to the given player's positions.
-    fn get_positions(&self, player: &Player) -> &Positions {
+    /// Returns an immutable reference to the given player's position.
+    fn get_position(&self, player: &Player) -> &Position {
         if *player == Player::One {
             &self.player1
         } else {
@@ -210,8 +224,8 @@ impl BoardState {
         }
     }
 
-    /// Returns a mutable reference to the given player's positions.  
-    fn get_positions_mut(&mut self, player: &Player) -> &mut Positions {
+    /// Returns a mutable reference to the given player's position.  
+    fn get_position_mut(&mut self, player: &Player) -> &mut Position {
         if *player == Player::One {
             &mut self.player1
         } else {
@@ -219,25 +233,25 @@ impl BoardState {
         }
     }
 
-    /// Returns an immutable reference to the current player's positions.
-    fn current_player_positions(&self) -> &Positions {
-        self.get_positions(&self.current_player())
+    /// Returns an immutable reference to the current player's position.
+    fn current_player_position(&self) -> &Position {
+        self.get_position(&self.current_player())
     }
 
-    /// Returns a mutable reference to the current player's positions.
-    fn current_player_positions_mut(&mut self) -> &mut Positions {
-        self.get_positions_mut(&self.current_player())
+    /// Returns a mutable reference to the current player's position.
+    fn current_player_position_mut(&mut self) -> &mut Position {
+        self.get_position_mut(&self.current_player())
     }
 
-    /// Returns an immutable reference to the positions of the last player who moved.
-    fn last_player_positions(&self) -> &Positions {
-        self.get_positions(&self.last_player())
+    /// Returns an immutable reference to the position of the last player who moved.
+    fn last_player_position(&self) -> &Position {
+        self.get_position(&self.last_player())
     }
 
     #[allow(dead_code)]
-    /// Returns a mutable reference to the positions of the last player who moved.
-    fn last_player_positions_mut(&mut self) -> &mut Positions {
-        self.get_positions_mut(&self.last_player())
+    /// Returns a mutable reference to the position of the last player who moved.
+    fn last_player_position_mut(&mut self) -> &mut Position {
+        self.get_position_mut(&self.last_player())
     }
 }
 
@@ -249,19 +263,15 @@ impl GameState for BoardState {
     }
 
     fn get_legal_moves(&self) -> Vec<Self::Move> {
-        ALL_MOVES
-            .into_iter()
-            .filter(|candidate| self.move_is_legal(candidate))
-            .collect()
+        self.get_legal_moves()
     }
 
-    fn try_move(&mut self, move_candidate: &Self::Move) -> bool {
-        if self.move_is_legal(move_candidate) {
-            self.apply_move(move_candidate);
-            true
-        } else {
-            false
-        }
+    fn next_state(&self, mov: &Self::Move) -> Self {
+        self.next_state(mov)
+    }
+
+    fn apply_move(&mut self, mov: &Self::Move) {
+        self.apply_move(mov)
     }
 
     fn game_result(&self) -> GameResult {
@@ -283,8 +293,13 @@ mod tests {
 
     #[test]
     fn test_move() {
-        let mut board = BoardState::new();
+        let mut board1 = BoardState::new();
+        let mut board2 = BoardState::new();
+        board1.apply_move(&Move(0));
+        board1.apply_move(&Move(1));
+        board2.apply_move(&Move(1));
+        board2.apply_move(&Move(0));
 
-        assert!(board.try_move(&Move(1)))
+        assert_eq!(board1, board2)
     }
 }

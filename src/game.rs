@@ -23,7 +23,7 @@ pub struct GamePlayer<G, E, S>
 where
     G: GameState,
     E: Evaluator<G>,
-    S: Strategy<G>,
+    S: Strategy<G, E>,
 {
     state: G,
     evaluator: E,
@@ -33,19 +33,42 @@ where
 /// The state of the game. This should include both the current board position and any other
 /// necessary information e.g. in chess, we want this to include some kind of history so we
 /// can determine things like the 3-move repetition rule.
-pub trait GameState: Clone {
+pub trait GameState: Sized {
     /// This type should describe the moves of the game.
-    type Move: Clone;
+    type Move;
 
     /// Returns a new game, starting from the beginning board state.
     fn new() -> Self;
+
     /// Returns a Vec of all the legal moves based on the current game state.
     fn get_legal_moves(&self) -> Vec<Self::Move>;
+
     /// Tries to apply the given move to advance the GameState. Returns true if the move was legal;
     /// false otherwise.
-    fn try_move(&mut self, move_candidate: &Self::Move) -> bool;
+    fn apply_move(&mut self, mov: &Self::Move);
+
+    /// Returns what the next game state would be if the move were applied.
+    fn next_state(&self, mov: &Self::Move) -> Self;
+
     /// Returns the current result of the game
     fn game_result(&self) -> GameResult;
+
+    /// Returns a vector of game states reachable from the current state in one move.
+    fn reachable_states(&self) -> Vec<Self> {
+        self.get_legal_moves()
+            .into_iter()
+            .map(|mov| self.next_state(&mov))
+            .collect()
+    }
+
+    /// Returns a vector of tuples (state, move), where state would be the next game state if move
+    /// were applied.
+    fn get_state_moves(&self) -> Vec<(Self, Self::Move)> {
+        self.get_legal_moves()
+            .into_iter()
+            .map(|mov| (self.next_state(&mov), mov))
+            .collect()
+    }
 }
 
 impl Player {
@@ -90,7 +113,7 @@ impl<G, E, S> GamePlayer<G, E, S>
 where
     G: GameState + Display,
     E: Evaluator<G>,
-    S: Strategy<G>,
+    S: Strategy<G, E>,
 {
     pub fn new() -> GamePlayer<G, E, S> {
         GamePlayer {
@@ -114,12 +137,12 @@ where
             match self.state.game_result() {
                 GameResult::Undetermined => {
                     if let Some(move_candidate) = self.strategy.choose_move(&self.state) {
-                        self.state.try_move(&move_candidate);
+                        self.state.apply_move(&move_candidate);
                         std::thread::sleep(std::time::Duration::from_secs(1))
                     }
                 }
                 result @ GameResult::Win(player) => {
-                    println!("{:?} wins!", player);
+                    println!("{} wins!", player);
                     return result;
                 }
                 result @ GameResult::Draw => {
