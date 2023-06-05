@@ -1,5 +1,7 @@
 pub mod tic_tac_toe;
 
+use std::fmt::Display;
+
 use rand::seq::SliceRandom;
 
 /// Used to represent which player is going.
@@ -11,10 +13,11 @@ pub enum Player {
 }
 
 /// Represents the current outcome of the game. Undetermined denotes a non-terminal state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GameResult {
     Win(Player),
     Draw,
+    #[default]
     Undetermined,
 }
 
@@ -36,6 +39,16 @@ impl Player {
     }
 }
 
+impl Display for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Player::One => write!(f, "Player One")?,
+            Player::Two => write!(f, "Player Two")?,
+        }
+        Ok(())
+    }
+}
+
 impl From<Player> for GameResult {
     /// Turns the given player into Win(player).
     fn from(value: Player) -> Self {
@@ -44,30 +57,6 @@ impl From<Player> for GameResult {
             Player::Two => Self::Win(Player::Two),
         }
     }
-}
-
-/// A struct with essential functions for two-player, turn-based, finite games of perfect
-/// information i.e. games to which Zermelo's Theorem applies. This interface is intended to make
-/// it easy to apply Reinforcement Learning techniques on these games.
-pub trait Game<E, S>
-where
-    E: Evaluator<Self::State>,
-    S: Strategy<Self::State>,
-{
-    type State: GameState;
-
-    fn new(evaluator: E, strategy: S) -> Self;
-
-    /*fn play(&mut self) -> GameResult {
-        loop {
-            if let Some(result) = self.state.game_result() {
-                return result;
-            }
-            if let Some(move_candidate) = self.strategy.choose_move(&self.state) {
-                self.state.try_move(&move_candidate)
-            }
-        }
-    }*/
 }
 
 /// The state of the game. This should include both the current board position and any other
@@ -96,17 +85,22 @@ pub trait GameState: Clone {
 pub trait Evaluator<G: GameState> {
     type Evaluation;
 
+    fn new() -> Self;
     fn evaluate(&self, state: &G) -> Self::Evaluation;
 }
 
 /// Useful struct for when you do not need to evaluate how advantageous a position is e.g. you are
 /// playing randomly.
-pub struct EmptyEvaluator();
+pub struct EmptyEvaluator;
 impl<G> Evaluator<G> for EmptyEvaluator
 where
     G: GameState,
 {
     type Evaluation = ();
+
+    fn new() -> Self {
+        EmptyEvaluator
+    }
 
     fn evaluate(&self, _state: &G) -> Self::Evaluation {
         ()
@@ -120,6 +114,7 @@ where
 pub trait Strategy<G: GameState> {
     type Evaluator: Evaluator<G>;
 
+    fn new() -> Self;
     fn choose_move(&self, state: &G) -> Option<G::Move>;
 }
 
@@ -131,9 +126,70 @@ where
 {
     type Evaluator = EmptyEvaluator;
 
+    fn new() -> Self {
+        RandomStrat
+    }
+
     fn choose_move(&self, state: &G) -> Option<G::Move> {
         let legal_moves = state.get_legal_moves();
         let random_move = legal_moves.choose(&mut rand::thread_rng());
         random_move.cloned()
+    }
+}
+
+#[derive(Debug)]
+pub struct GamePlayer<G, E, S>
+where
+    G: GameState,
+    E: Evaluator<G>,
+    S: Strategy<G>,
+{
+    state: G,
+    evaluator: E,
+    strategy: S,
+}
+
+impl<G, E, S> GamePlayer<G, E, S>
+where
+    G: GameState + Display,
+    E: Evaluator<G>,
+    S: Strategy<G>,
+{
+    pub fn new() -> GamePlayer<G, E, S> {
+        GamePlayer {
+            state: GameState::new(),
+            evaluator: Evaluator::new(),
+            strategy: Strategy::new(),
+        }
+    }
+
+    pub fn from(state: G, evaluator: E, strategy: S) -> GamePlayer<G, E, S> {
+        GamePlayer {
+            state,
+            evaluator,
+            strategy,
+        }
+    }
+
+    pub fn play(&mut self) -> GameResult {
+        loop {
+            print!("{}", &self.state);
+            match self.state.game_result() {
+                GameResult::Undetermined => {
+                    if let Some(move_candidate) = self.strategy.choose_move(&self.state) {
+                        self.state.try_move(&move_candidate);
+                        std::thread::sleep(std::time::Duration::from_secs(1))
+                    }
+                }
+                result @ GameResult::Win(player) => {
+                    println!("{:?} wins!", player);
+                    return result;
+                }
+                result @ GameResult::Draw => {
+                    println!("Game ended in a draw.");
+                    return result;
+                }
+            }
+        }
     }
 }

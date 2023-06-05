@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::*;
 
 /// Used to represent the pieces on the board.
@@ -6,6 +8,7 @@ pub enum Piece {
     #[default]
     X,
     O,
+    Empty,
 }
 
 /// We will encode positions using a bitboard. Position 0 is the upper left position on the board
@@ -76,7 +79,52 @@ const ALL_MOVES: [Move; 9] = [
 /// (A | B) & DRAW == DRAW
 const DRAW: Positions = 0b0000_0001_1111_1111;
 
+impl Piece {
+    pub fn other(&self) -> Piece {
+        match *self {
+            Piece::X => Piece::O,
+            Piece::O => Piece::X,
+            Piece::Empty => Piece::Empty,
+        }
+    }
+}
+
+impl Display for Piece {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let piece = match *self {
+            Piece::X => "X",
+            Piece::O => "O",
+            Piece::Empty => "_",
+        };
+        write!(f, "{}", piece)
+    }
+}
+
+impl Display for BoardState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for i in 0u16..3 {
+            let _ = self.display_row(f, i)?;
+        }
+        println!();
+        Ok(())
+    }
+}
+
 impl BoardState {
+    fn display_row(&self, f: &mut std::fmt::Formatter<'_>, row: Positions) -> std::fmt::Result {
+        let row_offset = row * 3;
+        let mut buffer = [Piece::Empty; 3];
+        buffer.iter_mut().enumerate().for_each(|(i, piece)| {
+            let shift = row_offset + i as u16;
+            if (self.player1 >> shift) & 1 == 1 {
+                *piece = self.player1_piece;
+            } else if (self.player2 >> shift) & 1 == 1 {
+                *piece = self.player1_piece.other();
+            }
+        });
+        write!(f, "{}|{}|{}\n", buffer[0], buffer[1], buffer[2])
+    }
+
     pub fn new() -> BoardState {
         BoardState::default()
     }
@@ -98,7 +146,8 @@ impl BoardState {
     /// try_move(), which will check to see if a move is legal before doing it. This should only
     /// be used for performance reasons or if you have already checked that the move is legal.
     pub fn apply_move(&mut self, move_candidate: &Move) {
-        *self.current_player_positions_mut() |= move_candidate.0
+        *self.current_player_positions_mut() |= move_candidate.0;
+        self.to_move.flip_player()
     }
 
     /// Returns true if the player who last moved has won the game.
