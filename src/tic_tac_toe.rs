@@ -1,6 +1,5 @@
+use crate::game::*;
 use std::fmt::Display;
-
-use crate::*;
 
 /// Used to represent the pieces on the board.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -278,7 +277,7 @@ impl GameState for BoardState {
 
 #[cfg(test)]
 mod tests {
-    use crate::{tic_tac_toe::Move, GameState};
+    use crate::{game::GameState, tic_tac_toe::Move};
 
     use super::BoardState;
 
