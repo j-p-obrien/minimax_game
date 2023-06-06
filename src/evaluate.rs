@@ -1,9 +1,31 @@
 use crate::{game::*, strategy::*};
 
-pub enum EvaluationType {
-    Q(f32),
-    QDist(Vec<f32>),
-    Policy(Vec<f32>),
+/// The return type of an evaluator that computes Q-values.
+pub trait QValue {
+    type Q: Sized;
+
+    fn q(&self) -> Self::Q;
+}
+
+/// The return type of an evaluator that computes the probabilities of a win/draw/loss.
+pub trait ResultDistribution {
+    type Probability: Sized;
+    type Expectation: Sized;
+
+    fn win_prob(&self) -> Self::Probability;
+    fn draw_prob(&self) -> Self::Probability;
+    fn loss_prob(&self) -> Self::Probability;
+    fn expected_result(&self) -> Self::Expectation;
+}
+
+/// This is the return type of an evaluator that computes a policy over the available moves.
+pub trait Policy<G>
+where
+    G: GameState,
+{
+    type Probability;
+
+    fn policy(&self) -> Vec<(G::Move, Self::Probability)>;
 }
 
 /// This trait is used to evaluate the strength of a player's position on the board. It can do
@@ -20,6 +42,7 @@ pub trait Evaluator<G: GameState> {
 
 /// Useful struct for when you do not need to evaluate how advantageous a position is e.g. you are
 /// playing randomly.
+#[derive(Debug)]
 pub struct EmptyEvaluator;
 impl<G> Evaluator<G> for EmptyEvaluator
 where

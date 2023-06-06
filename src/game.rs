@@ -43,8 +43,7 @@ pub trait GameState: Sized {
     /// Returns a Vec of all the legal moves based on the current game state.
     fn get_legal_moves(&self) -> Vec<Self::Move>;
 
-    /// Tries to apply the given move to advance the GameState. Returns true if the move was legal;
-    /// false otherwise.
+    /// Applies the given move to advance the GameState.
     fn apply_move(&mut self, mov: &Self::Move);
 
     /// Returns what the next game state would be if the move were applied.
