@@ -22,7 +22,7 @@ pub enum GameResult {
 pub struct GamePlayer<G, E, S>
 where
     G: GameState,
-    E: Evaluator<G>,
+    E: Evaluator<G, Evaluation = S::Evaluation>,
     S: Strategy<G, E>,
 {
     state: G,
@@ -41,7 +41,7 @@ pub trait GameState: Sized {
     fn new() -> Self;
 
     /// Returns a Vec of all the legal moves based on the current game state.
-    fn get_legal_moves(&self) -> Vec<Self::Move>;
+    fn legal_moves(&self) -> Vec<Self::Move>;
 
     /// Applies the given move to advance the GameState.
     fn apply_move(&mut self, mov: &Self::Move);
@@ -49,21 +49,24 @@ pub trait GameState: Sized {
     /// Returns what the next game state would be if the move were applied.
     fn next_state(&self, mov: &Self::Move) -> Self;
 
-    /// Returns the current result of the game
+    /// Returns the current result of the game from the perspective of the player whose turn it is.
     fn game_result(&self) -> GameResult;
+
+    /// Returns the current player i.e. the player whose turn it is.
+    fn current_player(&self) -> Player;
 
     /// Returns a vector of game states reachable from the current state in one move.
     fn reachable_states(&self) -> Vec<Self> {
-        self.get_legal_moves()
+        self.legal_moves()
             .into_iter()
             .map(|mov| self.next_state(&mov))
             .collect()
     }
 
-    /// Returns a vector of tuples (state, move), where state would be the next game state if move
-    /// were applied.
-    fn get_state_moves(&self) -> Vec<(Self, Self::Move)> {
-        self.get_legal_moves()
+    /// Returns a vector of moves and their associated game states. These are future states of the
+    /// game.
+    fn states_and_moves(&self) -> Vec<(Self, Self::Move)> {
+        self.legal_moves()
             .into_iter()
             .map(|mov| (self.next_state(&mov), mov))
             .collect()
@@ -98,6 +101,19 @@ impl Display for Player {
     }
 }
 
+impl GameResult {
+    pub fn is_determined(&self) -> bool {
+        *self != GameResult::Undetermined
+    }
+
+    pub fn other_result(&self) -> GameResult {
+        match *self {
+            GameResult::Win(player) => GameResult::Win(player.other_player()),
+            other_result => other_result,
+        }
+    }
+}
+
 impl From<Player> for GameResult {
     /// Turns the given player into Win(player).
     fn from(value: Player) -> Self {
@@ -111,7 +127,7 @@ impl From<Player> for GameResult {
 impl<G, E, S> GamePlayer<G, E, S>
 where
     G: GameState + Display,
-    E: Evaluator<G>,
+    E: Evaluator<G, Evaluation = S::Evaluation>,
     S: Strategy<G, E>,
 {
     pub fn new() -> GamePlayer<G, E, S> {
@@ -135,7 +151,9 @@ where
             print!("{}", &self.state);
             match self.state.game_result() {
                 GameResult::Undetermined => {
-                    if let Some(move_candidate) = self.strategy.choose_move(&self.state) {
+                    if let Some(move_candidate) =
+                        self.strategy.choose_move(&self.state, &self.evaluator)
+                    {
                         self.state.apply_move(&move_candidate);
                         std::thread::sleep(std::time::Duration::from_secs(1))
                     }

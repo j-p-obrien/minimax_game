@@ -142,7 +142,7 @@ impl BoardState {
     }
 
     /// Gets all the legal moves given the current board state.
-    pub fn get_legal_moves(&self) -> Vec<Move> {
+    pub fn legal_moves(&self) -> Vec<Move> {
         ALL_MOVES
             .into_iter()
             .filter(|candidate| self.move_is_legal(candidate))
@@ -262,8 +262,8 @@ impl GameState for BoardState {
         BoardState::new()
     }
 
-    fn get_legal_moves(&self) -> Vec<Self::Move> {
-        self.get_legal_moves()
+    fn legal_moves(&self) -> Vec<Self::Move> {
+        self.legal_moves()
     }
 
     fn next_state(&self, mov: &Self::Move) -> Self {
@@ -272,6 +272,10 @@ impl GameState for BoardState {
 
     fn apply_move(&mut self, mov: &Self::Move) {
         self.apply_move(mov)
+    }
+
+    fn current_player(&self) -> Player {
+        self.current_player()
     }
 
     fn game_result(&self) -> GameResult {
@@ -287,7 +291,7 @@ impl GameState for BoardState {
 
 #[cfg(test)]
 mod tests {
-    use crate::{game::GameState, tic_tac_toe::Move};
+    use crate::tic_tac_toe::Move;
 
     use super::BoardState;
 
